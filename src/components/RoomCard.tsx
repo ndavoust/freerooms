@@ -8,6 +8,7 @@ export type CardModel = {
   capacity?: number
   mode: 'free' | 'soon' | 'reserved'
   freeAt?: Date
+  summary?: string
   canBook: boolean
   pending: boolean
   error?: string
@@ -28,7 +29,10 @@ function statusLabel(card: CardModel): string {
 
 function barLabel(card: CardModel): string {
   if (card.mode === 'reserved') return 'Salle réservée sur ce créneau'
-  if (card.mode === 'soon' && card.freeAt) return `Occupée jusqu’à ${formatClock(card.freeAt)}, puis libre`
+  if (card.mode === 'soon' && card.freeAt) {
+    const untilFree = `Occupée jusqu’à ${formatClock(card.freeAt)}, puis libre`
+    return card.summary ? `${card.summary}. ${untilFree}` : untilFree
+  }
   return 'Libre sur tout le créneau'
 }
 
@@ -57,9 +61,12 @@ export function RoomCard({ card, now, until, onReserve }: RoomCardProps) {
     <li>
       <article className="room-card" aria-labelledby={titleId}>
         <div className="card-head">
-          <h2 id={titleId} className="room-name">
-            {card.name}
-          </h2>
+          <div className="card-title">
+            <h2 id={titleId} className="room-name">
+              {card.name}
+            </h2>
+            {card.mode === 'soon' && card.summary ? <p className="card-summary">{card.summary}</p> : null}
+          </div>
           <p className={`status status-${card.mode}`}>
             <span className={`dot dot-${card.mode}`} aria-hidden="true" />
             {statusLabel(card)}

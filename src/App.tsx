@@ -9,7 +9,7 @@ import { bookRoom, listPrimaryEvents, listRoomEvents, queryFreeBusy, releaseRoom
 import { clearStoredToken, initAuth, loadGis, readStoredToken, requestToken, storeToken } from './googleAuth.ts'
 import { MEETING_WINDOW_MS, pickNextRoomMeeting, visibleMeeting, type RoomMeeting } from './nextMeeting.ts'
 import { seatOccupancy } from './occupancy.ts'
-import { RESERVATION_LOOKBACK_MS, pickReservedRooms, type RoomEvent } from './reservedRooms.ts'
+import { RESERVATION_LOOKBACK_MS, currentMeetingSummary, pickReservedRooms, type RoomEvent } from './reservedRooms.ts'
 import { loadRooms, type Room, type RoomsConfig } from './rooms.ts'
 import { formatClock, formatDay, untilSlots } from './time.ts'
 
@@ -408,7 +408,9 @@ export default function App() {
     setRefreshKey((value) => value + 1)
   }
 
-  const cards = config ? buildCards(config, locationId, busy, reserved, cardErrors, pendingId, now, selected) : []
+  const cards = config
+    ? buildCards(config, locationId, busy, roomEvents, reserved, cardErrors, pendingId, now, selected)
+    : []
   const occupancy = config ? seatOccupancy(config.rooms, busy, locationId, now) : null
   const reservedRooms = config
     ? pickReservedRooms(
@@ -559,6 +561,7 @@ function buildCards(
   config: RoomsConfig,
   locationId: string,
   busy: Record<string, BusyEntry>,
+  roomEvents: Record<string, RoomEvent[]>,
   reserved: Record<string, true>,
   cardErrors: Record<string, string>,
   pendingId: string | null,
@@ -576,6 +579,7 @@ function buildCards(
       room,
       labels.get(room.locationId) ?? room.locationId,
       entry,
+      roomEvents[room.calendarId] ?? [],
       reserved,
       cardErrors,
       pendingId,
@@ -598,6 +602,7 @@ function toCard(
   room: Room,
   locationLabel: string,
   entry: BusyEntry,
+  events: RoomEvent[],
   reserved: Record<string, true>,
   cardErrors: Record<string, string>,
   pendingId: string | null,
@@ -625,6 +630,7 @@ function toCard(
     capacity: room.capacity,
     mode: status.kind,
     freeAt: status.kind === 'soon' ? status.freeAt : undefined,
+    summary: status.kind === 'soon' ? currentMeetingSummary(now, events) : undefined,
     canBook: bookingWindow(now, until, status) !== null,
     pending: pendingId === room.calendarId,
     error: cardErrors[room.calendarId],

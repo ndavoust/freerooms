@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { OCCUPIED_LABEL, pickReservedRooms, reservationProgress, type RoomEvent } from './reservedRooms.ts'
+import {
+  currentMeetingSummary,
+  OCCUPIED_LABEL,
+  pickReservedRooms,
+  reservationProgress,
+  type RoomEvent,
+} from './reservedRooms.ts'
 import type { Location, Room } from './rooms.ts'
 import type { BusyInterval } from './availability.ts'
 
@@ -25,6 +31,30 @@ function eventsOf(start: string, end: string, summary: string): RoomEvent[] {
 function busyOf(start: string, end: string): { busy: BusyInterval[] } {
   return { busy: [{ start: at(start), end: at(end) }] }
 }
+
+describe('currentMeetingSummary', () => {
+  it('uses the meeting that is in progress', () => {
+    const events = eventsOf('2026-10-30T09:00:00Z', '2026-10-30T10:30:00Z', 'Point quotidien')
+    expect(currentMeetingSummary(now, events)).toBe('Point quotidien')
+  })
+
+  it('prefers the meeting that started latest when two overlap', () => {
+    const events = [
+      ...eventsOf('2026-10-30T09:00:00Z', '2026-10-30T10:30:00Z', 'Bloc'),
+      ...eventsOf('2026-10-30T09:45:00Z', '2026-10-30T10:20:00Z', 'Point quotidien'),
+    ]
+    expect(currentMeetingSummary(now, events)).toBe('Point quotidien')
+  })
+
+  it('ignores a later booking and a blank title', () => {
+    expect(
+      currentMeetingSummary(now, eventsOf('2026-10-30T10:15:00Z', '2026-10-30T11:00:00Z', 'Après')),
+    ).toBeUndefined()
+    expect(
+      currentMeetingSummary(now, [{ summary: '   ', start: at('2026-10-30T09:00:00Z'), end: at('2026-10-30T10:30:00Z') }]),
+    ).toBeUndefined()
+  })
+})
 
 describe('reservationProgress', () => {
   it('measures the share of the meeting already elapsed', () => {

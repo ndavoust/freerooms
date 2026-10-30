@@ -88,6 +88,19 @@ function blockingBooking(
   return pickUpcoming(now, until, busy)
 }
 
+/** Title of the meeting in progress, when the calendar event has one. */
+export function currentMeetingSummary(now: Date, events: RoomEvent[]): string | undefined {
+  const time = now.getTime()
+  const current = events
+    .filter((event) => event.start.getTime() <= time && event.end.getTime() > time)
+    .sort((a, b) => b.start.getTime() - a.start.getTime())
+  for (const event of current) {
+    const summary = event.summary?.trim()
+    if (summary) return summary
+  }
+  return undefined
+}
+
 function pickCurrent<T extends { start: Date; end: Date }>(now: Date, intervals: T[]): T | null {
   const time = now.getTime()
   const current = intervals.filter(

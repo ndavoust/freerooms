@@ -8,10 +8,11 @@ const MINUTE_MS = 60 * 1000
 /** Long enough that every “Jusque” slot still falls inside the booking. */
 const PREVIEW_END_MIN = 180
 
-const PREVIEW_BOOKINGS: Record<string, { summary: string; startMin: number }> = {
+const PREVIEW_BOOKINGS: Record<string, { summary: string; startMin: number; endMin?: number }> = {
   Paris: { summary: 'Comité produit', startMin: -60 },
   Lyon: { summary: 'Revue design', startMin: -12 },
   Toulouse: { summary: 'Atelier marque', startMin: 6 },
+  Deauville: { summary: 'Point quotidien', startMin: -20, endMin: 8 },
 }
 
 /** Deterministic occupancy for the local ?preview=1 board. Not used in production. */
@@ -19,7 +20,7 @@ export function previewSchedule(now: Date, room: Room): { busy: BusyInterval[]; 
   const booking = PREVIEW_BOOKINGS[room.name]
   if (!booking) return { busy: [], events: [] }
   const start = new Date(now.getTime() + booking.startMin * MINUTE_MS)
-  const end = new Date(now.getTime() + PREVIEW_END_MIN * MINUTE_MS)
+  const end = new Date(now.getTime() + (booking.endMin ?? PREVIEW_END_MIN) * MINUTE_MS)
   return {
     busy: [{ start, end }],
     events: [{ summary: booking.summary, start, end }],

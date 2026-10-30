@@ -624,6 +624,17 @@ h1 {
   align-items: center;
 }
 
+.card-title {
+  min-width: 0;
+}
+
+.card-summary {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .room-name {
   margin: 0;
   font-size: 16px;
@@ -736,7 +747,7 @@ h1 {
     align-items: center;
   }
 
-  .card-head .room-name {
+  .card-head .card-title {
     grid-area: name;
   }
 
