@@ -95,6 +95,7 @@ export function RoomBoard({
           error={releaseError}
           onRelease={onRelease}
         />
+        <ReservedRooms rooms={reservedRooms} now={now} />
       </>
     )
   }
