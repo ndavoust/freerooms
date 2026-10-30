@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-10-30T09:00:00.000Z",
+  "locations": [
+    { "id": "paris", "label": "Paris" },
+    { "id": "nantes-1er-etage", "label": "Nantes 1er étage" },
+    { "id": "nantes-2e-etage", "label": "Nantes 2e étage" }
+  ],
+  "rooms": [
+    {
+      "name": "Salle Erdre",
+      "calendarId": "example-erdre@resource.calendar.google.com",
+      "locationId": "nantes-1er-etage",
+      "capacity": 6
+    },
+    {
+      "name": "Salle Loire",
+      "calendarId": "example-loire@resource.calendar.google.com",
+      "locationId": "nantes-1er-etage",
+      "capacity": 10
+    },
+    {
+      "name": "Salle Marais",
+      "calendarId": "example-marais@resource.calendar.google.com",
+      "locationId": "paris",
+      "capacity": 4
+    },
+    {
+      "name": "Salle Seine",
+      "calendarId": "example-seine@resource.calendar.google.com",
+      "locationId": "paris",
+      "capacity": 8
+    },
+    {
+      "name": "Salle Vendée",
+      "calendarId": "example-vendee@resource.calendar.google.com",
+      "locationId": "nantes-2e-etage",
+      "capacity": 12
+    }
+  ]
+}

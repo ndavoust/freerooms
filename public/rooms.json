@@ -1,0 +1,123 @@
+{
+  "generatedAt": "2026-10-30T10:25:36.557Z",
+  "locations": [
+    {
+      "id": "guist-hau-1er-etage",
+      "label": "Guist'hau 1er étage"
+    },
+    {
+      "id": "guist-hau-2e-etage",
+      "label": "Guist'hau 2e étage"
+    }
+  ],
+  "rooms": [
+    {
+      "name": "Biarritz",
+      "calendarId": "c_188fiuekmpe9gj5umjilnftj3bts4@resource.calendar.google.com",
+      "locationId": "guist-hau-2e-etage",
+      "capacity": 6
+    },
+    {
+      "name": "Bordeaux",
+      "calendarId": "c_18856gi3qbb68jbal7lp7n1b3hfo8@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 8
+    },
+    {
+      "name": "Brest",
+      "calendarId": "c_1889l4d7djn76gr9gj47ne8pmg4he@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 4
+    },
+    {
+      "name": "Bulle double",
+      "calendarId": "c_188b32b6fivt4gidloo0oq41buf9g@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 2
+    },
+    {
+      "name": "Call Room SdB",
+      "calendarId": "c_188bq39aprapegnvjntr1b1k92pvq@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 1
+    },
+    {
+      "name": "Deauville",
+      "calendarId": "c_188duigst88oeguujqcb2h0jp21qk@resource.calendar.google.com",
+      "locationId": "guist-hau-2e-etage",
+      "capacity": 8
+    },
+    {
+      "name": "Lille",
+      "calendarId": "c_188fsb7mco0o2hc7irg3m14jlqr6i@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 4
+    },
+    {
+      "name": "Lyon",
+      "calendarId": "c_1880nioqrtvh6gfjjk1sf13f2v8ok@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 10
+    },
+    {
+      "name": "Nantes",
+      "calendarId": "c_188dsdf8mfu2aj9in4s82pir1vsbo@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 4
+    },
+    {
+      "name": "Paris",
+      "calendarId": "c_1884sqm829scujvpi04kmrrsq0k1g@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 45
+    },
+    {
+      "name": "Quiet room écran 1",
+      "calendarId": "c_188e3qgmmanikjimm0sdhsl4u2lmg@resource.calendar.google.com",
+      "locationId": "guist-hau-2e-etage",
+      "capacity": 1
+    },
+    {
+      "name": "Quiet room écran 2",
+      "calendarId": "c_188564ttlncpkg2dhc2a7t8bu9qu6@resource.calendar.google.com",
+      "locationId": "guist-hau-2e-etage",
+      "capacity": 1
+    },
+    {
+      "name": "Quiet room place 1",
+      "calendarId": "c_188b5tv4pl2coidahjam26m40pvmm@resource.calendar.google.com",
+      "locationId": "guist-hau-2e-etage",
+      "capacity": 1
+    },
+    {
+      "name": "Quiet room place 2",
+      "calendarId": "c_188f9hb7nqb8qiqch63djhjrk19ce@resource.calendar.google.com",
+      "locationId": "guist-hau-2e-etage",
+      "capacity": 1
+    },
+    {
+      "name": "Salle de bain",
+      "calendarId": "c_188360a54rvhegg0jqgk6ugkdjk7s@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 4
+    },
+    {
+      "name": "Salle de bain",
+      "calendarId": "c_1887ivriauapkgajmcdjgqhib56ei@resource.calendar.google.com",
+      "locationId": "guist-hau-2e-etage",
+      "capacity": 2
+    },
+    {
+      "name": "Strasbourg",
+      "calendarId": "c_18813i4poj3bchhgms8um0acpmjbi@resource.calendar.google.com",
+      "locationId": "guist-hau-1er-etage",
+      "capacity": 6
+    },
+    {
+      "name": "Toulouse",
+      "calendarId": "c_188baq56dmdjah57l6ogep81chkvq@resource.calendar.google.com",
+      "locationId": "guist-hau-2e-etage",
+      "capacity": 8
+    }
+  ]
+}
