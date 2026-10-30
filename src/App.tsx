@@ -5,14 +5,7 @@ import { RoomBoard } from './components/RoomBoard.tsx'
 import type { CardModel } from './components/RoomCard.tsx'
 import type { BookResult, BusyEntry } from './googleCalendar.ts'
 import { bookRoom, listPrimaryEvents, listRoomEvents, queryFreeBusy, releaseRoom } from './googleCalendar.ts'
-import {
-  initAuth,
-  loadGis,
-  requestToken,
-  resetAuthAttempt,
-  revokeToken,
-  trySilentSignIn,
-} from './googleAuth.ts'
+import { clearStoredToken, initAuth, loadGis, readStoredToken, requestToken, storeToken } from './googleAuth.ts'
 import { MEETING_WINDOW_MS, pickNextRoomMeeting, visibleMeeting, type RoomMeeting } from './nextMeeting.ts'
 import { RESERVATION_LOOKBACK_MS, pickReservedRooms, type RoomEvent } from './reservedRooms.ts'
 import { loadRooms, type Room, type RoomsConfig } from './rooms.ts'
@@ -32,6 +25,7 @@ function clientIdFromEnv(): string {
 }
 
 const clientId = clientIdFromEnv()
+const restoredToken = !preview && clientId ? readStoredToken() : null
 
 type AuthPhase = 'checking' | 'signedOut' | 'ready'
 
@@ -58,10 +52,8 @@ export default function App() {
   const [now, setNow] = useState(() => new Date())
   const [config, setConfig] = useState<RoomsConfig | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [authPhase, setAuthPhase] = useState<AuthPhase>(
-    preview ? 'ready' : clientId ? 'checking' : 'signedOut',
-  )
-  const [token, setToken] = useState<string | null>(null)
+  const [authPhase, setAuthPhase] = useState<AuthPhase>(preview || restoredToken ? 'ready' : 'signedOut')
+  const [token, setToken] = useState<string | null>(restoredToken)
   const [authError, setAuthError] = useState<string | null>(null)
   const [locationId, setLocationId] = useState('all')
   const [untilIso, setUntilIso] = useState<string | null>(null)
@@ -95,23 +87,6 @@ export default function App() {
       .catch(() => {
         if (active) setLoadError('Le fichier rooms.json est illisible.')
       })
-    return () => {
-      active = false
-    }
-  }, [])
-
-  useEffect(() => {
-    if (preview || !clientId) return
-    let active = true
-    trySilentSignIn(clientId).then((result) => {
-      if (!active) return
-      if (result.ok) {
-        setToken(result.token)
-        setAuthPhase('ready')
-      } else {
-        setAuthPhase('signedOut')
-      }
-    })
     return () => {
       active = false
     }
@@ -160,18 +135,12 @@ export default function App() {
           if (!active) return
           setRoomEvents((current) => ({ ...current, ...listed }))
         } catch (error) {
-          if (errorStatus(error) === 401) {
-            setToken(null)
-            setAuthPhase('signedOut')
-            setAuthError('La session Google a expiré. Reconnecte-toi.')
-          }
+          if (errorStatus(error) === 401) loseSession('La session Google a expiré. Reconnecte-toi.')
         }
       } catch (error) {
         if (!active) return
         if (errorStatus(error) === 401) {
-          setToken(null)
-          setAuthPhase('signedOut')
-          setAuthError('La session Google a expiré. Reconnecte-toi.')
+          loseSession('La session Google a expiré. Reconnecte-toi.')
           return
         }
         setBusyError('Les agendas n’ont pas répondu. Réessaie dans un instant.')
@@ -215,9 +184,7 @@ export default function App() {
       } catch (error) {
         if (!active) return
         if (errorStatus(error) === 401) {
-          setToken(null)
-          setAuthPhase('signedOut')
-          setAuthError('La session Google a expiré. Reconnecte-toi.')
+          loseSession('La session Google a expiré. Reconnecte-toi.')
           return
         }
         setNextMeeting(null)
@@ -249,6 +216,7 @@ export default function App() {
         else if (result.error !== 'popup_closed') setAuthError('La connexion Google a échoué. Réessaie.')
         return
       }
+      storeToken(result.token, result.expiresIn)
       setToken(result.token)
       setAuthPhase('ready')
     } catch {
@@ -299,11 +267,18 @@ export default function App() {
     if (confirmed) signOut()
   }
 
+  function loseSession(message: string) {
+    clearStoredToken()
+    setToken(null)
+    setAuthPhase('signedOut')
+    setAuthError(message)
+  }
+
   function signOut() {
     refreshLeft.current = 0
     setRefreshing(false)
-    if (token) revokeToken(token)
-    resetAuthAttempt()
+    // Forget the local token only. Revoking the Google grant ends the account session.
+    clearStoredToken()
     setToken(null)
     setAuthPhase('signedOut')
     setBusy({})
@@ -368,9 +343,7 @@ export default function App() {
     if (!result.ok) {
       if (result.detail) console.error(result.detail)
       if (result.reason === 'unauthorized') {
-        setToken(null)
-        setAuthPhase('signedOut')
-        setAuthError(releaseMessage(result.reason))
+        loseSession(releaseMessage(result.reason))
         return
       }
       setReleaseError(releaseMessage(result.reason))
@@ -422,9 +395,7 @@ export default function App() {
     if (!result.ok) {
       if (result.detail) console.error(result.detail)
       if (result.reason === 'unauthorized') {
-        setToken(null)
-        setAuthPhase('signedOut')
-        setAuthError(bookMessage(result.reason))
+        loseSession(bookMessage(result.reason))
         return
       }
       setCardErrors((current) => ({ ...current, [calendarId]: bookMessage(result.reason) }))

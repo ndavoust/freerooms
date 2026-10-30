@@ -11,9 +11,37 @@ type TokenClient = {
   requestAccessToken: (overrideConfig?: { prompt?: string }) => void
 }
 
+const TOKEN_STORAGE_KEY = 'freerooms.google-token'
+const EXPIRY_SKEW_MS = 60_000
+
+type TokenStore = {
+  getItem: (key: string) => string | null
+  setItem: (key: string, value: string) => void
+  removeItem: (key: string) => void
+}
+
+type StoredToken = {
+  token: string
+  expiresAt: number
+}
+
 let tokenClient: TokenClient | null = null
 let pending: ((result: TokenResult) => void) | null = null
-let silentPromise: Promise<TokenResult> | null = null
+
+function browserStore(): TokenStore | null {
+  try {
+    if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function') return null
+    return localStorage
+  } catch {
+    return null
+  }
+}
+
+function isStoredToken(value: unknown): value is StoredToken {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as { token?: unknown; expiresAt?: unknown }
+  return typeof record.token === 'string' && record.token.length > 0 && typeof record.expiresAt === 'number'
+}
 
 export function loadGis(timeoutMs = 10000): Promise<void> {
   if (window.google?.accounts?.oauth2) return Promise.resolve()
@@ -74,22 +102,47 @@ export function requestToken(prompt?: string): Promise<TokenResult> {
   })
 }
 
-export function trySilentSignIn(clientId: string): Promise<TokenResult> {
-  if (!silentPromise) {
-    silentPromise = loadGis()
-      .then(() => {
-        initAuth(clientId)
-        return requestToken('')
-      })
-      .catch(() => ({ ok: false as const, error: 'gis_unavailable' }))
+export function readStoredToken(now = Date.now(), store: TokenStore | null = browserStore()): string | null {
+  if (!store) return null
+  try {
+    const raw = store.getItem(TOKEN_STORAGE_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    if (!isStoredToken(parsed) || parsed.expiresAt <= now + EXPIRY_SKEW_MS) {
+      store.removeItem(TOKEN_STORAGE_KEY)
+      return null
+    }
+    return parsed.token
+  } catch {
+    try {
+      store.removeItem(TOKEN_STORAGE_KEY)
+    } catch {
+      // Storage can be blocked in private mode.
+    }
+    return null
   }
-  return silentPromise
 }
 
-export function resetAuthAttempt(): void {
-  silentPromise = null
+export function storeToken(
+  token: string,
+  expiresIn: number,
+  now = Date.now(),
+  store: TokenStore | null = browserStore(),
+): void {
+  if (!store) return
+  const expiresAt = now + Math.max(0, expiresIn) * 1000
+  try {
+    store.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token, expiresAt }))
+  } catch {
+    // The in-memory session still works until the page is closed.
+  }
 }
 
-export function revokeToken(token: string): void {
-  window.google?.accounts.oauth2.revoke(token, () => {})
+export function clearStoredToken(store: TokenStore | null = browserStore()): void {
+  if (!store) return
+  try {
+    store.removeItem(TOKEN_STORAGE_KEY)
+  } catch {
+    // Ignore storage failures.
+  }
 }

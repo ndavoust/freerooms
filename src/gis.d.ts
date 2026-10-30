@@ -18,7 +18,6 @@ type GoogleIdentity = {
         callback: (response: GoogleTokenResponse) => void
         error_callback?: (error: { type?: string; message?: string }) => void
       }) => TokenClient
-      revoke: (accessToken: string, done?: () => void) => void
     }
   }
 }
