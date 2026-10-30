@@ -3,11 +3,11 @@
   "locations": [
     {
       "id": "guist-hau-1er-etage",
-      "label": "Guist'hau 1er étage"
+      "label": "1er étage"
     },
     {
       "id": "guist-hau-2e-etage",
-      "label": "Guist'hau 2e étage"
+      "label": "2e étage"
     }
   ],
   "rooms": [

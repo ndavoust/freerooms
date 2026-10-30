@@ -500,7 +500,7 @@ export default function App() {
               </svg>
             </span>
             <div className="titles">
-              <h1>Rooms</h1>
+              <h1>Guist'hau</h1>
               <p className="day">{formatDay(now)}</p>
             </div>
           </div>

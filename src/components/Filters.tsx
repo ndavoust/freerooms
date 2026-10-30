@@ -33,17 +33,35 @@ export function Filters({ slots, until, onUntil, locations, locationId, onLocati
           })}
         </div>
       </div>
-      <label className="field">
-        <span>Lieu</span>
-        <select value={locationId} onChange={(event) => onLocation(event.target.value)}>
-          <option value="all">Tous les lieux</option>
-          {locations.map((location) => (
-            <option key={location.id} value={location.id}>
-              {location.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="field field-locations">
+        <span id="location-label">Lieu</span>
+        <div className="pills" role="radiogroup" aria-labelledby="location-label">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={locationId === 'all'}
+            className={locationId === 'all' ? 'pill pill-on' : 'pill'}
+            onClick={() => onLocation('all')}
+          >
+            Tous les lieux
+          </button>
+          {locations.map((location) => {
+            const selected = location.id === locationId
+            return (
+              <button
+                key={location.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={selected ? 'pill pill-on' : 'pill'}
+                onClick={() => onLocation(location.id)}
+              >
+                {location.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
