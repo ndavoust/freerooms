@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { bookingWindow, classifyRoom, withoutOverlap } from './availability.ts'
 import { LoginPanel } from './components/LoginPanel.tsx'
+import { OccupancyStats } from './components/OccupancyStats.tsx'
 import { RoomBoard } from './components/RoomBoard.tsx'
 import type { CardModel } from './components/RoomCard.tsx'
 import type { BookResult, BusyEntry } from './googleCalendar.ts'
 import { bookRoom, listPrimaryEvents, listRoomEvents, queryFreeBusy, releaseRoom } from './googleCalendar.ts'
 import { clearStoredToken, initAuth, loadGis, readStoredToken, requestToken, storeToken } from './googleAuth.ts'
 import { MEETING_WINDOW_MS, pickNextRoomMeeting, visibleMeeting, type RoomMeeting } from './nextMeeting.ts'
+import { seatOccupancy } from './occupancy.ts'
 import { RESERVATION_LOOKBACK_MS, pickReservedRooms, type RoomEvent } from './reservedRooms.ts'
 import { loadRooms, type Room, type RoomsConfig } from './rooms.ts'
 import { formatClock, formatDay, untilSlots } from './time.ts'
@@ -407,6 +409,7 @@ export default function App() {
   }
 
   const cards = config ? buildCards(config, locationId, busy, reserved, cardErrors, pendingId, now, selected) : []
+  const occupancy = config ? seatOccupancy(config.rooms, busy, locationId, now) : null
   const reservedRooms = config
     ? pickReservedRooms(
         config.rooms,
@@ -539,6 +542,7 @@ export default function App() {
             void reserve(id)
           }}
           />
+          {occupancy ? <OccupancyStats occupancy={occupancy} /> : null}
           <footer className="page-foot">
             <button type="button" className="foot-action" onClick={requestSignOut}>
               Se déconnecter

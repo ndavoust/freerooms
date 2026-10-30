@@ -157,6 +157,38 @@ h1 {
   animation: spin 0.8s linear infinite;
 }
 
+.stats {
+  margin-top: 32px;
+}
+
+.stats-card {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.stats-rate {
+  margin: 0;
+  color: var(--ink);
+  font-size: 32px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.stats-label {
+  margin: 4px 0 12px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.stats-detail {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
 .page-foot {
   margin-top: 40px;
 }
