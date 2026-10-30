@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
-import { bookingWindow, classifyRoom } from './availability.ts'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { bookingWindow, classifyRoom, withoutOverlap } from './availability.ts'
 import { LoginPanel } from './components/LoginPanel.tsx'
 import { RoomBoard } from './components/RoomBoard.tsx'
 import type { CardModel } from './components/RoomCard.tsx'
 import type { BookResult, BusyEntry } from './googleCalendar.ts'
-import { bookRoom, queryFreeBusy } from './googleCalendar.ts'
+import { bookRoom, listPrimaryEvents, listRoomEvents, queryFreeBusy, releaseRoom } from './googleCalendar.ts'
 import {
   initAuth,
   loadGis,
@@ -13,11 +13,15 @@ import {
   revokeToken,
   trySilentSignIn,
 } from './googleAuth.ts'
+import { MEETING_WINDOW_MS, pickNextRoomMeeting, visibleMeeting, type RoomMeeting } from './nextMeeting.ts'
+import { RESERVATION_LOOKBACK_MS, pickReservedRooms, type RoomEvent } from './reservedRooms.ts'
 import { loadRooms, type Room, type RoomsConfig } from './rooms.ts'
 import { formatClock, formatDay, untilSlots } from './time.ts'
 
 const PREVIEW_NOTE =
   'Aperçu local : les occupations sont fictives, et Réserver ne crée pas d’événement Google.'
+
+const NOTICE_MS = 5000
 
 const preview =
   import.meta.env.DEV && new URLSearchParams(window.location.search).has('preview')
@@ -62,12 +66,20 @@ export default function App() {
   const [locationId, setLocationId] = useState('all')
   const [untilIso, setUntilIso] = useState<string | null>(null)
   const [busy, setBusy] = useState<Record<string, BusyEntry>>({})
+  const [roomEvents, setRoomEvents] = useState<Record<string, RoomEvent[]>>({})
   const [busyError, setBusyError] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [cardErrors, setCardErrors] = useState<Record<string, string>>({})
   const [notices, setNotices] = useState<string[]>([])
+  const noticeTimers = useRef(new Map<string, number>())
   const [reserved, setReserved] = useState<Record<string, true>>({})
   const [refreshKey, setRefreshKey] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshLeft = useRef(0)
+  const [nextMeeting, setNextMeeting] = useState<RoomMeeting | null>(null)
+  const [releasing, setReleasing] = useState(false)
+  const [releaseError, setReleaseError] = useState<string | null>(null)
+  const [previewReleased, setPreviewReleased] = useState(false)
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000)
@@ -119,21 +131,41 @@ export default function App() {
 
     const run = async () => {
       try {
+        const fetchedAt = new Date()
+        const lookback = new Date(fetchedAt.getTime() - RESERVATION_LOOKBACK_MS)
+        const horizon = new Date(horizonMs)
         if (import.meta.env.DEV && preview) {
-          const { previewBusy } = await import('./preview.ts')
-          const fetchedAt = new Date()
-          const next: Record<string, BusyEntry> = {}
-          for (const id of ids) next[id] = { busy: previewBusy(fetchedAt, id) }
+          const { previewSchedule } = await import('./preview.ts')
+          const nextBusy: Record<string, BusyEntry> = {}
+          const nextEvents: Record<string, RoomEvent[]> = {}
+          for (const room of config.rooms) {
+            if (!ids.includes(room.calendarId)) continue
+            const schedule = previewSchedule(fetchedAt, room)
+            nextBusy[room.calendarId] = { busy: schedule.busy }
+            nextEvents[room.calendarId] = schedule.events
+          }
           if (!active) return
-          setBusy((current) => ({ ...current, ...next }))
+          setBusy((current) => ({ ...current, ...nextBusy }))
+          setRoomEvents((current) => ({ ...current, ...nextEvents }))
           setBusyError(null)
           return
         }
         if (!token) return
-        const next = await queryFreeBusy(token, ids, new Date(), new Date(horizonMs))
+        const next = await queryFreeBusy(token, ids, lookback, horizon)
         if (!active) return
         setBusy((current) => ({ ...current, ...next }))
         setBusyError(null)
+        try {
+          const listed = await listRoomEvents(token, ids, lookback, horizon)
+          if (!active) return
+          setRoomEvents((current) => ({ ...current, ...listed }))
+        } catch (error) {
+          if (errorStatus(error) === 401) {
+            setToken(null)
+            setAuthPhase('signedOut')
+            setAuthError('La session Google a expiré. Reconnecte-toi.')
+          }
+        }
       } catch (error) {
         if (!active) return
         if (errorStatus(error) === 401) {
@@ -146,7 +178,9 @@ export default function App() {
       }
     }
 
-    void run()
+    void run().finally(() => {
+      if (active) finishRefresh()
+    })
     const timer = window.setInterval(() => {
       void run()
     }, 60_000)
@@ -155,6 +189,52 @@ export default function App() {
       window.clearInterval(timer)
     }
   }, [onBoard, config, locationId, token, horizonMs, refreshKey])
+
+  useEffect(() => {
+    if (!onBoard || !config) return
+    let active = true
+
+    const run = async () => {
+      try {
+        if (import.meta.env.DEV && preview) {
+          if (previewReleased) return
+          const { previewNextMeeting } = await import('./preview.ts')
+          if (!active) return
+          setNextMeeting(previewNextMeeting(new Date(), config))
+          return
+        }
+        if (!token) return
+        const fetchedAt = new Date()
+        const events = await listPrimaryEvents(
+          token,
+          new Date(fetchedAt.getTime() - MEETING_WINDOW_MS),
+          new Date(fetchedAt.getTime() + MEETING_WINDOW_MS),
+        )
+        if (!active) return
+        setNextMeeting(pickNextRoomMeeting(events, config.rooms, config.locations, fetchedAt))
+      } catch (error) {
+        if (!active) return
+        if (errorStatus(error) === 401) {
+          setToken(null)
+          setAuthPhase('signedOut')
+          setAuthError('La session Google a expiré. Reconnecte-toi.')
+          return
+        }
+        setNextMeeting(null)
+      }
+    }
+
+    void run().finally(() => {
+      if (active) finishRefresh()
+    })
+    const timer = window.setInterval(() => {
+      void run()
+    }, 60_000)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [onBoard, config, token, refreshKey, previewReleased])
 
   const signIn = useCallback(async () => {
     setAuthError(null)
@@ -177,15 +257,126 @@ export default function App() {
     }
   }, [])
 
+  function clearNoticeTimers() {
+    for (const timer of noticeTimers.current.values()) window.clearTimeout(timer)
+    noticeTimers.current.clear()
+  }
+
+  useEffect(() => clearNoticeTimers, [])
+
+  function dismissNotice(notice: string) {
+    const timer = noticeTimers.current.get(notice)
+    if (timer !== undefined) {
+      window.clearTimeout(timer)
+      noticeTimers.current.delete(notice)
+    }
+    setNotices((current) => current.filter((item) => item !== notice))
+  }
+
+  function pushNotice(notice: string) {
+    const previous = noticeTimers.current.get(notice)
+    if (previous !== undefined) window.clearTimeout(previous)
+    setNotices((current) => [notice, ...current.filter((item) => item !== notice)])
+    const timer = window.setTimeout(() => dismissNotice(notice), NOTICE_MS)
+    noticeTimers.current.set(notice, timer)
+  }
+
+  function finishRefresh() {
+    if (refreshLeft.current === 0) return
+    refreshLeft.current -= 1
+    if (refreshLeft.current === 0) setRefreshing(false)
+  }
+
+  function refreshBoard() {
+    refreshLeft.current = 2
+    setRefreshing(true)
+    setReserved({})
+    setRefreshKey((value) => value + 1)
+  }
+
+  function requestSignOut() {
+    const confirmed = window.confirm('Se déconnecter ?')
+    if (confirmed) signOut()
+  }
+
   function signOut() {
+    refreshLeft.current = 0
+    setRefreshing(false)
     if (token) revokeToken(token)
     resetAuthAttempt()
     setToken(null)
     setAuthPhase('signedOut')
     setBusy({})
+    setRoomEvents({})
     setReserved({})
+    clearNoticeTimers()
     setNotices([])
     setCardErrors({})
+    setNextMeeting(null)
+    setReleasing(false)
+    setReleaseError(null)
+    setPreviewReleased(false)
+  }
+
+  function releaseMessage(reason: Exclude<BookResult, { ok: true }>['reason']): string {
+    if (reason === 'forbidden') return 'Seul l’organisateur peut libérer cette salle.'
+    if (reason === 'unauthorized') return 'La session Google a expiré. Reconnecte-toi.'
+    return 'La salle n’a pas pu être libérée.'
+  }
+
+  async function release() {
+    const meeting = visibleMeeting(nextMeeting, new Date())
+    if (!meeting?.canRelease || releasing) return
+    setReleaseError(null)
+    setReleasing(true)
+    const notice = `${meeting.roomName} · salle libérée.`
+    const markReleased = () => {
+      setNextMeeting(null)
+      setReserved((current) => {
+        if (!current[meeting.calendarId]) return current
+        const next = { ...current }
+        delete next[meeting.calendarId]
+        return next
+      })
+      setBusy((current) => {
+        const entry = current[meeting.calendarId]
+        if (!entry || entry.error) return current
+        return {
+          ...current,
+          [meeting.calendarId]: {
+            busy: withoutOverlap(entry.busy, meeting.start, meeting.end),
+          },
+        }
+      })
+      pushNotice(notice)
+      setRefreshKey((value) => value + 1)
+    }
+
+    if (preview) {
+      setPreviewReleased(true)
+      markReleased()
+      setReleasing(false)
+      return
+    }
+    if (!token) {
+      setReleasing(false)
+      return
+    }
+
+    const result = await releaseRoom(token, meeting.eventId, meeting.calendarId)
+    setReleasing(false)
+    if (!result.ok) {
+      if (result.detail) console.error(result.detail)
+      if (result.reason === 'unauthorized') {
+        setToken(null)
+        setAuthPhase('signedOut')
+        setAuthError(releaseMessage(result.reason))
+        return
+      }
+      setReleaseError(releaseMessage(result.reason))
+      return
+    }
+    markReleased()
   }
 
   async function reserve(calendarId: string) {
@@ -207,7 +398,7 @@ export default function App() {
     const notice = `${room.name} · réservé jusqu’à ${formatClock(selected)}.`
     const markReserved = () => {
       setReserved((current) => ({ ...current, [calendarId]: true }))
-      setNotices((current) => [notice, ...current.filter((item) => item !== notice)])
+      pushNotice(notice)
       setBusy((current) => ({
         ...current,
         [calendarId]: {
@@ -245,6 +436,18 @@ export default function App() {
   }
 
   const cards = config ? buildCards(config, locationId, busy, reserved, cardErrors, pendingId, now, selected) : []
+  const reservedRooms = config
+    ? pickReservedRooms(
+        config.rooms,
+        config.locations,
+        roomEvents,
+        busy,
+        locationId,
+        now,
+        selected,
+        new Set(cards.map((card) => card.calendarId)),
+      )
+    : []
   const visibleCount = config
     ? config.rooms.filter((room) => locationId === 'all' || room.locationId === locationId).length
     : 0
@@ -297,19 +500,30 @@ export default function App() {
               </svg>
             </span>
             <div className="titles">
-              <h1>Salles libres</h1>
+              <h1>Rooms</h1>
               <p className="day">{formatDay(now)}</p>
             </div>
           </div>
           <div className="top-side">
+            {onBoard ? (
+              <button
+                type="button"
+                className={refreshing ? 'icon-btn refreshing' : 'icon-btn'}
+                aria-label="Actualiser"
+                disabled={refreshing}
+                onClick={refreshBoard}
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+                  />
+                </svg>
+              </button>
+            ) : null}
             <time className="clock" dateTime={now.toISOString()}>
               {formatClock(now)}
             </time>
-            {onBoard && !preview ? (
-              <button type="button" className="ghost" onClick={signOut}>
-                Se déconnecter
-              </button>
-            ) : null}
           </div>
         </div>
       </header>
@@ -327,6 +541,7 @@ export default function App() {
           />
         ) : null}
         {config && onBoard ? (
+          <>
           <RoomBoard
             now={now}
             slots={slots}
@@ -336,15 +551,29 @@ export default function App() {
             locationId={locationId}
             onLocation={setLocationId}
             cards={cards}
+            reservedRooms={reservedRooms}
             loading={loading}
             message={message}
             messageTone={messageTone}
             notices={notices}
-            previewNote={preview ? PREVIEW_NOTE : null}
-            onReserve={(id) => {
-              void reserve(id)
-            }}
+            onDismissNotice={dismissNotice}
+          previewNote={preview ? PREVIEW_NOTE : null}
+          meeting={visibleMeeting(nextMeeting, now)}
+          releasing={releasing}
+          releaseError={releaseError}
+          onRelease={() => {
+            void release()
+          }}
+          onReserve={(id) => {
+            void reserve(id)
+          }}
           />
+          <footer className="page-foot">
+            <button type="button" className="foot-action" onClick={requestSignOut}>
+              Se déconnecter
+            </button>
+          </footer>
+          </>
         ) : null}
       </main>
     </>

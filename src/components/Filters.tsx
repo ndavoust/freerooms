@@ -13,22 +13,26 @@ type FiltersProps = {
 export function Filters({ slots, until, onUntil, locations, locationId, onLocation }: FiltersProps) {
   return (
     <div className="filters">
-      <label className="field">
-        <span>Jusque</span>
-        <select
-          value={until.toISOString()}
-          onChange={(event) => {
-            const next = slots.find((slot) => slot.toISOString() === event.target.value)
-            if (next) onUntil(next)
-          }}
-        >
-          {slots.map((slot) => (
-            <option key={slot.toISOString()} value={slot.toISOString()}>
-              {formatClock(slot)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="field field-times">
+        <span id="until-label">Jusque</span>
+        <div className="pills" role="radiogroup" aria-labelledby="until-label">
+          {slots.map((slot) => {
+            const selected = slot.getTime() === until.getTime()
+            return (
+              <button
+                key={slot.toISOString()}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={selected ? 'pill pill-on' : 'pill'}
+                onClick={() => onUntil(slot)}
+              >
+                {formatClock(slot)}
+              </button>
+            )
+          })}
+        </div>
+      </div>
       <label className="field">
         <span>Lieu</span>
         <select value={locationId} onChange={(event) => onLocation(event.target.value)}>

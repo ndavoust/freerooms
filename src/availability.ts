@@ -10,6 +10,13 @@ export type RoomStatus =
   | { kind: 'soon'; freeAt: Date }
   | { kind: 'hidden' }
 
+/** Drop intervals that overlap [start, end), keeping bookings that only touch the edges. */
+export function withoutOverlap(busy: BusyInterval[], start: Date, end: Date): BusyInterval[] {
+  const startMs = start.getTime()
+  const endMs = end.getTime()
+  return busy.filter((interval) => interval.end.getTime() <= startMs || interval.start.getTime() >= endMs)
+}
+
 export function classifyRoom(now: Date, until: Date, busy: BusyInterval[]): RoomStatus {
   const nowMs = now.getTime()
   const untilMs = until.getTime()

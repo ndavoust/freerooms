@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { availabilityBar, bookingWindow, classifyRoom, type BusyInterval } from './availability.ts'
+import { availabilityBar, bookingWindow, classifyRoom, withoutOverlap, type BusyInterval } from './availability.ts'
 
 const at = (iso: string) => new Date(iso)
+
+describe('withoutOverlap', () => {
+  it('drops the released meeting and keeps a later booking', () => {
+    const released = { start: at('2026-01-15T09:00:00Z'), end: at('2026-01-15T09:30:00Z') }
+    const later: BusyInterval = { start: at('2026-01-15T11:00:00Z'), end: at('2026-01-15T12:00:00Z') }
+    expect(withoutOverlap([released, later], released.start, released.end)).toEqual([later])
+  })
+})
 
 describe('classifyRoom', () => {
   const now = at('2026-01-15T09:05:00Z')
