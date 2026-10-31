@@ -7,8 +7,10 @@ type LoginPanelProps = {
 
 export function LoginPanel({ checking, needsConfig, error, onSignIn }: LoginPanelProps) {
   return (
-    <section className="login">
-      <p className="login-copy">Connecte ton agenda Google pour voir les salles libres et en réserver une.</p>
+    <section className="login" role="dialog" aria-modal="true" aria-labelledby="login-copy">
+      <p id="login-copy" className="login-copy">
+        Connecte ton agenda Google pour voir les salles libres et en réserver une.
+      </p>
       {needsConfig ? (
         <p className="login-note">
           Ajoute VITE_GOOGLE_CLIENT_ID dans un fichier .env, puis relance le serveur. Le README décrit le

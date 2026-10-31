@@ -407,9 +407,38 @@ h1 {
   background: #d2e3fc;
 }
 
+.app:has(.login-stage) {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.login-stage {
+  position: relative;
+  height: calc(100dvh - 96px);
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.login-backdrop {
+  pointer-events: none;
+  user-select: none;
+}
+
+.login-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgb(248 250 253 / 28%);
+  backdrop-filter: blur(3px);
+}
+
 .login {
-  max-width: 28rem;
-  margin: 32px auto 0;
+  width: min(28rem, 100%);
+  margin: 0;
   padding: 40px 32px 32px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -761,6 +790,10 @@ h1 {
     grid-area: action;
     justify-self: end;
     width: auto;
+  }
+
+  .login {
+    padding: 28px 20px 24px;
   }
 }
 

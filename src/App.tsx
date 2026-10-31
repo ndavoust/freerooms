@@ -9,6 +9,7 @@ import { bookRoom, listPrimaryEvents, listRoomEvents, queryFreeBusy, releaseRoom
 import { clearStoredToken, initAuth, loadGis, readStoredToken, requestToken, storeToken } from './googleAuth.ts'
 import { MEETING_WINDOW_MS, pickNextRoomMeeting, visibleMeeting, type RoomMeeting } from './nextMeeting.ts'
 import { seatOccupancy } from './occupancy.ts'
+import { previewSchedule } from './preview.ts'
 import { RESERVATION_LOOKBACK_MS, currentMeetingSummary, pickReservedRooms, type RoomEvent } from './reservedRooms.ts'
 import { loadRooms, type Room, type RoomsConfig } from './rooms.ts'
 import { formatClock, formatDay, untilSlots } from './time.ts'
@@ -507,7 +508,11 @@ export default function App() {
         {loadError ? <p className="empty empty-warn">{loadError}</p> : null}
         {!loadError && !config ? <p className="status-line">Chargement des salles…</p> : null}
         {config && !onBoard ? (
-          <LoginPanel
+          <LoginGate
+            config={config}
+            now={now}
+            slots={slots}
+            until={selected}
             checking={authPhase === 'checking'}
             needsConfig={!clientId && !preview}
             error={authError}
@@ -555,6 +560,81 @@ export default function App() {
       </main>
     </>
   )
+}
+
+function LoginGate({
+  config,
+  now,
+  slots,
+  until,
+  checking,
+  needsConfig,
+  error,
+  onSignIn,
+}: {
+  config: RoomsConfig
+  now: Date
+  slots: Date[]
+  until: Date
+  checking: boolean
+  needsConfig: boolean
+  error: string | null
+  onSignIn: () => void
+}) {
+  const board = fictionalBoard(config, now, until)
+  return (
+    <div className="login-stage">
+      <div className="login-backdrop" inert aria-hidden="true">
+        <RoomBoard
+          now={now}
+          slots={slots}
+          until={until}
+          onUntil={() => {}}
+          locations={config.locations}
+          locationId="all"
+          onLocation={() => {}}
+          cards={board.cards}
+          reservedRooms={board.reservedRooms}
+          loading={false}
+          message={null}
+          messageTone="neutral"
+          notices={[]}
+          onDismissNotice={() => {}}
+          previewNote={null}
+          meeting={null}
+          releasing={false}
+          releaseError={null}
+          onRelease={() => {}}
+          onReserve={() => {}}
+        />
+      </div>
+      <div className="login-scrim">
+        <LoginPanel checking={checking} needsConfig={needsConfig} error={error} onSignIn={onSignIn} />
+      </div>
+    </div>
+  )
+}
+
+function fictionalBoard(config: RoomsConfig, now: Date, until: Date) {
+  const busy: Record<string, BusyEntry> = {}
+  const events: Record<string, RoomEvent[]> = {}
+  for (const room of config.rooms) {
+    const schedule = previewSchedule(now, room)
+    busy[room.calendarId] = { busy: schedule.busy }
+    events[room.calendarId] = schedule.events
+  }
+  const cards = buildCards(config, 'all', busy, events, {}, {}, null, now, until)
+  const reservedRooms = pickReservedRooms(
+    config.rooms,
+    config.locations,
+    events,
+    busy,
+    'all',
+    now,
+    until,
+    new Set(cards.map((card) => card.calendarId)),
+  )
+  return { cards, reservedRooms }
 }
 
 function buildCards(

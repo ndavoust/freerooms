@@ -15,7 +15,7 @@ const PREVIEW_BOOKINGS: Record<string, { summary: string; startMin: number; endM
   Deauville: { summary: 'Point quotidien', startMin: -20, endMin: 8 },
 }
 
-/** Deterministic occupancy for the local ?preview=1 board. Not used in production. */
+/** Deterministic occupancy for the signed-out backdrop and the local ?preview=1 board. */
 export function previewSchedule(now: Date, room: Room): { busy: BusyInterval[]; events: RoomEvent[] } {
   const booking = PREVIEW_BOOKINGS[room.name]
   if (!booking) return { busy: [], events: [] }
