@@ -8,6 +8,7 @@ type LoginPanelProps = {
 export function LoginPanel({ checking, needsConfig, error, onSignIn }: LoginPanelProps) {
   return (
     <section className="login" role="dialog" aria-modal="true" aria-labelledby="login-copy">
+      <span className="login-handle" aria-hidden="true" />
       <p id="login-copy" className="login-copy">
         Connecte ton agenda Google pour voir les salles libres et en réserver une.
       </p>

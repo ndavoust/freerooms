@@ -608,7 +608,8 @@ function LoginGate({
           onReserve={() => {}}
         />
       </div>
-      <div className="login-scrim">
+      <div className="login-scrim" />
+      <div className="login-slot">
         <LoginPanel checking={checking} needsConfig={needsConfig} error={error} onSignIn={onSignIn} />
       </div>
     </div>

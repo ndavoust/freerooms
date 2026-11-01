@@ -428,12 +428,23 @@ h1 {
   position: absolute;
   inset: 0;
   z-index: 1;
+  background: rgb(248 250 253 / 28%);
+  backdrop-filter: blur(3px);
+}
+
+.login-slot {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: rgb(248 250 253 / 28%);
-  backdrop-filter: blur(3px);
+  pointer-events: none;
+}
+
+.login-slot .login {
+  pointer-events: auto;
 }
 
 .login {
@@ -452,6 +463,10 @@ h1 {
   color: var(--ink);
   font-size: 16px;
   line-height: 1.5;
+}
+
+.login-handle {
+  display: none;
 }
 
 .login-note {
@@ -792,8 +807,54 @@ h1 {
     width: auto;
   }
 
+  .app:has(.login-stage) {
+    padding-bottom: 0;
+  }
+
+  .login-stage {
+    height: calc(100dvh - 75px);
+    min-height: 0;
+  }
+
+  .login-slot {
+    align-items: flex-end;
+    padding: 0;
+  }
+
   .login {
-    padding: 28px 20px 24px;
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    padding: 12px 24px calc(24px + env(safe-area-inset-bottom, 0px));
+    border-bottom: 0;
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -1px 2px rgb(60 64 67 / 30%), 0 -2px 6px rgb(60 64 67 / 15%);
+    animation: login-sheet-in 220ms ease-out;
+  }
+
+  .login-handle {
+    display: block;
+    width: 32px;
+    height: 4px;
+    margin: 4px auto 20px;
+    background: var(--line);
+    border-radius: 999px;
+  }
+
+  .login .google-signin {
+    width: 100%;
+  }
+}
+
+@keyframes login-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: none;
   }
 }
 
