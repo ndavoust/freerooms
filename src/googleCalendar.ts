@@ -6,6 +6,17 @@ import { formatParisDateTime } from './time.ts'
 const FREE_BUSY_CHUNK = 50
 const EVENT_SUMMARY = 'Réservé last minute'
 
+export function bookingTitle(name: string | null | undefined): string {
+  const trimmed = name?.trim() ?? ''
+  if (!trimmed) return EVENT_SUMMARY
+  const at = trimmed.indexOf('@')
+  if (at >= 0) {
+    const local = trimmed.slice(0, at).trim()
+    return local || EVENT_SUMMARY
+  }
+  return trimmed
+}
+
 export type BusyEntry = {
   busy: BusyInterval[]
   error?: string
@@ -289,11 +300,22 @@ async function deleteEvent(accessToken: string, eventId: string): Promise<void> 
   )
 }
 
+export async function fetchBookerName(accessToken: string): Promise<string | null> {
+  const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!response.ok) return null
+  const body = (await response.json()) as { summary?: string }
+  const summary = body.summary?.trim()
+  return summary || null
+}
+
 export async function bookRoom(
   accessToken: string,
   calendarId: string,
   start: Date,
   end: Date,
+  summary?: string,
 ): Promise<BookResult> {
   const response = await fetch(
     'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none',
@@ -301,7 +323,7 @@ export async function bookRoom(
       method: 'POST',
       headers: authHeaders(accessToken),
       body: JSON.stringify({
-        summary: EVENT_SUMMARY,
+        summary: summary?.trim() || EVENT_SUMMARY,
         start: { dateTime: formatParisDateTime(start), timeZone: 'Europe/Paris' },
         end: { dateTime: formatParisDateTime(end), timeZone: 'Europe/Paris' },
         attendees: [{ email: calendarId, resource: true }],

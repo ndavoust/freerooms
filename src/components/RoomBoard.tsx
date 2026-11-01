@@ -1,6 +1,7 @@
 import type { RoomMeeting } from '../nextMeeting.ts'
 import type { ReservedRoom } from '../reservedRooms.ts'
 import type { Location } from '../rooms.ts'
+import { BoardSection } from './BoardSection.tsx'
 import { Filters } from './Filters.tsx'
 import { NextMeeting } from './NextMeeting.tsx'
 import { ReservedRooms } from './ReservedRooms.tsx'
@@ -23,10 +24,19 @@ type RoomBoardProps = {
   onDismissNotice: (notice: string) => void
   previewNote: string | null
   meeting: RoomMeeting | null
+  meetingKnown: boolean
   releasing: boolean
   releaseError: string | null
   onRelease: () => void
   onReserve: (calendarId: string) => void
+  sessionRenew: SessionRenew | null
+}
+
+type SessionRenew = {
+  blocked: boolean
+  renewing: boolean
+  error: string | null
+  onRenew: () => void
 }
 
 export function RoomBoard({
@@ -46,13 +56,26 @@ export function RoomBoard({
   onDismissNotice,
   previewNote,
   meeting,
+  meetingKnown,
   releasing,
   releaseError,
   onRelease,
   onReserve,
+  sessionRenew,
 }: RoomBoardProps) {
   const status = (
     <>
+      {sessionRenew ? (
+        <div className="renew" role="status">
+          <div>
+            <p>{sessionRenew.blocked ? 'La session Google a expiré.' : 'La session Google expire bientôt.'}</p>
+            {sessionRenew.error ? <p className="renew-error">{sessionRenew.error}</p> : null}
+          </div>
+          <button type="button" className="renew-action" onClick={sessionRenew.onRenew} disabled={sessionRenew.renewing}>
+            {sessionRenew.renewing ? 'Connexion…' : 'Continuer'}
+          </button>
+        </div>
+      ) : null}
       {previewNote ? (
         <div className="banner banner-preview" role="status">
           <p>{previewNote}</p>
@@ -83,51 +106,58 @@ export function RoomBoard({
     </>
   )
 
-  if (meeting) {
-    return (
-      <>
-        {status}
-        <h2 className="section-title">Prochaine réunion</h2>
-        <NextMeeting
-          meeting={meeting}
-          now={now}
-          pending={releasing}
-          error={releaseError}
-          onRelease={onRelease}
-        />
-        <ReservedRooms rooms={reservedRooms} now={now} />
-      </>
-    )
-  }
-
   return (
     <>
       {status}
-      <h2 className="section-title">Salles libres</h2>
-      <Filters
-        slots={slots}
-        until={until}
-        onUntil={onUntil}
-        locations={locations}
-        locationId={locationId}
-        onLocation={onLocation}
-      />
-      {loading ? (
+      {meetingKnown ? (
+        <>
+          {meeting ? (
+            <BoardSection title="Prochaine réunion" titleId="next-meeting-section" collapsible={false}>
+              <NextMeeting
+                meeting={meeting}
+                now={now}
+                pending={releasing}
+                error={releaseError}
+                onRelease={onRelease}
+              />
+            </BoardSection>
+          ) : null}
+          <BoardSection title="Salles libres" titleId="free-rooms-section" collapsible={meeting !== null}>
+            <Filters
+              slots={slots}
+              until={until}
+              onUntil={onUntil}
+              locations={locations}
+              locationId={locationId}
+              onLocation={onLocation}
+            />
+            {loading ? (
+              <p className="status-line" role="status">
+                Lecture des agendas…
+              </p>
+            ) : null}
+            {message ? (
+              <p className={messageTone === 'warn' ? 'empty empty-warn' : 'empty'} role="status">
+                {message}
+              </p>
+            ) : null}
+            <ul className="room-list">
+              {cards.map((card) => (
+                <RoomCard key={card.calendarId} card={card} now={now} until={until} onReserve={onReserve} />
+              ))}
+            </ul>
+          </BoardSection>
+          {reservedRooms.length > 0 ? (
+            <BoardSection title="Salles réservées" titleId="reserved-title" collapsible>
+              <ReservedRooms rooms={reservedRooms} now={now} />
+            </BoardSection>
+          ) : null}
+        </>
+      ) : (
         <p className="status-line" role="status">
           Lecture des agendas…
         </p>
-      ) : null}
-      {message ? (
-        <p className={messageTone === 'warn' ? 'empty empty-warn' : 'empty'} role="status">
-          {message}
-        </p>
-      ) : null}
-      <ul className="room-list">
-        {cards.map((card) => (
-          <RoomCard key={card.calendarId} card={card} now={now} until={until} onReserve={onReserve} />
-        ))}
-      </ul>
-      <ReservedRooms rooms={reservedRooms} now={now} />
+      )}
     </>
   )
 }

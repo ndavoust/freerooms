@@ -3,10 +3,17 @@ import type { Room } from './rooms.ts'
 
 type BusyLookup = Record<string, { busy: BusyInterval[]; error?: string } | undefined>
 
+export type FloorOccupancy = {
+  locationId: string
+  occupiedSeats: number
+  totalSeats: number
+  rate: number
+}
+
 export type SeatOccupancy =
   | { status: 'pending' }
   | { status: 'empty' }
-  | { status: 'ready'; occupiedSeats: number; totalSeats: number; rate: number }
+  | { status: 'ready'; occupiedSeats: number; totalSeats: number; rate: number; floors: FloorOccupancy[] }
 
 export function seatOccupancy(
   rooms: Room[],
@@ -18,6 +25,7 @@ export function seatOccupancy(
   let occupiedSeats = 0
   let totalSeats = 0
   let pending = false
+  const byLocation = new Map<string, { occupiedSeats: number; totalSeats: number }>()
 
   for (const room of rooms) {
     if (locationId !== 'all' && room.locationId !== locationId) continue
@@ -30,14 +38,28 @@ export function seatOccupancy(
     }
     if (entry.error) continue
     totalSeats += seats
-    if (entry.busy.some((interval) => interval.start.getTime() <= time && interval.end.getTime() > time)) {
-      occupiedSeats += seats
-    }
+    const occupied = entry.busy.some(
+      (interval) => interval.start.getTime() <= time && interval.end.getTime() > time,
+    )
+    if (occupied) occupiedSeats += seats
+    const tally = byLocation.get(room.locationId) ?? { occupiedSeats: 0, totalSeats: 0 }
+    tally.totalSeats += seats
+    if (occupied) tally.occupiedSeats += seats
+    byLocation.set(room.locationId, tally)
   }
 
   if (pending) return { status: 'pending' }
   if (totalSeats === 0) return { status: 'empty' }
-  return { status: 'ready', occupiedSeats, totalSeats, rate: occupiedSeats / totalSeats }
+  const floors =
+    locationId === 'all' && byLocation.size > 1
+      ? [...byLocation.entries()].map(([id, tally]) => ({
+          locationId: id,
+          occupiedSeats: tally.occupiedSeats,
+          totalSeats: tally.totalSeats,
+          rate: tally.occupiedSeats / tally.totalSeats,
+        }))
+      : []
+  return { status: 'ready', occupiedSeats, totalSeats, rate: occupiedSeats / totalSeats, floors }
 }
 
 export function formatOccupancyRate(rate: number): string {

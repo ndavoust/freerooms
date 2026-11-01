@@ -12,7 +12,9 @@ type TokenClient = {
 }
 
 const TOKEN_STORAGE_KEY = 'freerooms.google-token'
-const EXPIRY_SKEW_MS = 60_000
+const NAME_STORAGE_KEY = 'freerooms.booker-name'
+export const TOKEN_EXPIRY_SKEW_MS = 60_000
+export const RENEW_LEAD_MS = 5 * 60 * 1000
 
 type TokenStore = {
   getItem: (key: string) => string | null
@@ -102,20 +104,62 @@ export function requestToken(prompt?: string): Promise<TokenResult> {
   })
 }
 
+export function sessionNeedsRenew(expiresAt: number, now = Date.now()): boolean {
+  return expiresAt - now <= RENEW_LEAD_MS
+}
+
+export function readStoredSession(
+  now = Date.now(),
+  store: TokenStore | null = browserStore(),
+): { token: string; expiresAt: number } | null {
+  const token = readStoredToken(now, store)
+  if (!token || !store) return null
+  try {
+    const parsed: unknown = JSON.parse(store.getItem(TOKEN_STORAGE_KEY) ?? '')
+    if (!isStoredToken(parsed)) return { token, expiresAt: now + RENEW_LEAD_MS }
+    return { token, expiresAt: parsed.expiresAt }
+  } catch {
+    return { token, expiresAt: now + RENEW_LEAD_MS }
+  }
+}
+
+export function readBookerName(store: TokenStore | null = browserStore()): string | null {
+  if (!store) return null
+  try {
+    const name = store.getItem(NAME_STORAGE_KEY)?.trim()
+    return name ? name : null
+  } catch {
+    return null
+  }
+}
+
+export function storeBookerName(name: string, store: TokenStore | null = browserStore()): void {
+  if (!store) return
+  const trimmed = name.trim()
+  if (!trimmed) return
+  try {
+    store.setItem(NAME_STORAGE_KEY, trimmed)
+  } catch {
+    // The in-memory name still works until the page is closed.
+  }
+}
+
 export function readStoredToken(now = Date.now(), store: TokenStore | null = browserStore()): string | null {
   if (!store) return null
   try {
     const raw = store.getItem(TOKEN_STORAGE_KEY)
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
-    if (!isStoredToken(parsed) || parsed.expiresAt <= now + EXPIRY_SKEW_MS) {
+    if (!isStoredToken(parsed) || parsed.expiresAt <= now + TOKEN_EXPIRY_SKEW_MS) {
       store.removeItem(TOKEN_STORAGE_KEY)
+      store.removeItem(NAME_STORAGE_KEY)
       return null
     }
     return parsed.token
   } catch {
     try {
       store.removeItem(TOKEN_STORAGE_KEY)
+      store.removeItem(NAME_STORAGE_KEY)
     } catch {
       // Storage can be blocked in private mode.
     }
@@ -142,6 +186,7 @@ export function clearStoredToken(store: TokenStore | null = browserStore()): voi
   if (!store) return
   try {
     store.removeItem(TOKEN_STORAGE_KEY)
+    store.removeItem(NAME_STORAGE_KEY)
   } catch {
     // Ignore storage failures.
   }

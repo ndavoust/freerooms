@@ -1,12 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { bookingWindow, classifyRoom, withoutOverlap } from './availability.ts'
 import { LoginPanel } from './components/LoginPanel.tsx'
-import { OccupancyStats } from './components/OccupancyStats.tsx'
+import { OccupancyStats, type FloorStat } from './components/OccupancyStats.tsx'
 import { RoomBoard } from './components/RoomBoard.tsx'
 import type { CardModel } from './components/RoomCard.tsx'
 import type { BookResult, BusyEntry } from './googleCalendar.ts'
-import { bookRoom, listPrimaryEvents, listRoomEvents, queryFreeBusy, releaseRoom } from './googleCalendar.ts'
-import { clearStoredToken, initAuth, loadGis, readStoredToken, requestToken, storeToken } from './googleAuth.ts'
+import {
+  bookRoom,
+  bookingTitle,
+  fetchBookerName,
+  listPrimaryEvents,
+  listRoomEvents,
+  queryFreeBusy,
+  releaseRoom,
+} from './googleCalendar.ts'
+import {
+  TOKEN_EXPIRY_SKEW_MS,
+  clearStoredToken,
+  initAuth,
+  loadGis,
+  readBookerName,
+  readStoredSession,
+  requestToken,
+  sessionNeedsRenew,
+  storeBookerName,
+  storeToken,
+} from './googleAuth.ts'
 import { MEETING_WINDOW_MS, pickNextRoomMeeting, visibleMeeting, type RoomMeeting } from './nextMeeting.ts'
 import { seatOccupancy } from './occupancy.ts'
 import { previewSchedule } from './preview.ts'
@@ -28,7 +47,8 @@ function clientIdFromEnv(): string {
 }
 
 const clientId = clientIdFromEnv()
-const restoredToken = !preview && clientId ? readStoredToken() : null
+const restored = !preview && clientId ? readStoredSession() : null
+const restoredToken = restored?.token ?? null
 
 type AuthPhase = 'checking' | 'signedOut' | 'ready'
 
@@ -57,6 +77,12 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [authPhase, setAuthPhase] = useState<AuthPhase>(preview || restoredToken ? 'ready' : 'signedOut')
   const [token, setToken] = useState<string | null>(restoredToken)
+  const [expiresAt, setExpiresAt] = useState<number | null>(restored?.expiresAt ?? null)
+  const [sessionBlocked, setSessionBlocked] = useState(false)
+  const [renewing, setRenewing] = useState(false)
+  const [renewError, setRenewError] = useState<string | null>(null)
+  const [bookerName, setBookerName] = useState<string | null>(restored ? readBookerName() : null)
+  const renewingRef = useRef(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [locationId, setLocationId] = useState('all')
   const [untilIso, setUntilIso] = useState<string | null>(null)
@@ -71,7 +97,7 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const refreshLeft = useRef(0)
-  const [nextMeeting, setNextMeeting] = useState<RoomMeeting | null>(null)
+  const [nextMeeting, setNextMeeting] = useState<RoomMeeting | null | undefined>(undefined)
   const [releasing, setReleasing] = useState(false)
   const [releaseError, setReleaseError] = useState<string | null>(null)
   const [previewReleased, setPreviewReleased] = useState(false)
@@ -80,6 +106,20 @@ export default function App() {
     const timer = window.setInterval(() => setNow(new Date()), 1000)
     return () => window.clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (preview || !token || bookerName) return
+    let active = true
+    void fetchBookerName(token).then((name) => {
+      if (!active || !name) return
+      const title = bookingTitle(name)
+      storeBookerName(title)
+      setBookerName(title)
+    })
+    return () => {
+      active = false
+    }
+  }, [token, bookerName])
 
   useEffect(() => {
     let active = true
@@ -99,9 +139,13 @@ export default function App() {
   const selected = currentUntil(slots, untilIso)
   const horizonMs = (slots[slots.length - 1] ?? selected).getTime()
   const onBoard = Boolean(config) && (preview || (authPhase === 'ready' && token !== null))
+  const renewDue = expiresAt !== null && sessionNeedsRenew(expiresAt, now.getTime())
+  const tokenExpired = expiresAt !== null && expiresAt <= now.getTime() + TOKEN_EXPIRY_SKEW_MS
+  const showRenew = renewDue || sessionBlocked
+  const pollsStopped = sessionBlocked || tokenExpired
 
   useEffect(() => {
-    if (!onBoard || !config) return
+    if (!onBoard || !config || pollsStopped) return
     const ids = config.rooms
       .filter((room) => locationId === 'all' || room.locationId === locationId)
       .map((room) => room.calendarId)
@@ -138,12 +182,12 @@ export default function App() {
           if (!active) return
           setRoomEvents((current) => ({ ...current, ...listed }))
         } catch (error) {
-          if (errorStatus(error) === 401) loseSession('La session Google a expiré. Reconnecte-toi.')
+          if (errorStatus(error) === 401) holdSession()
         }
       } catch (error) {
         if (!active) return
         if (errorStatus(error) === 401) {
-          loseSession('La session Google a expiré. Reconnecte-toi.')
+          holdSession()
           return
         }
         setBusyError('Les agendas n’ont pas répondu. Réessaie dans un instant.')
@@ -160,10 +204,10 @@ export default function App() {
       active = false
       window.clearInterval(timer)
     }
-  }, [onBoard, config, locationId, token, horizonMs, refreshKey])
+  }, [onBoard, config, locationId, token, horizonMs, refreshKey, pollsStopped])
 
   useEffect(() => {
-    if (!onBoard || !config) return
+    if (!onBoard || !config || pollsStopped) return
     let active = true
 
     const run = async () => {
@@ -187,7 +231,7 @@ export default function App() {
       } catch (error) {
         if (!active) return
         if (errorStatus(error) === 401) {
-          loseSession('La session Google a expiré. Reconnecte-toi.')
+          holdSession()
           return
         }
         setNextMeeting(null)
@@ -204,7 +248,7 @@ export default function App() {
       active = false
       window.clearInterval(timer)
     }
-  }, [onBoard, config, token, refreshKey, previewReleased])
+  }, [onBoard, config, token, refreshKey, previewReleased, pollsStopped])
 
   const signIn = useCallback(async () => {
     setAuthError(null)
@@ -219,9 +263,7 @@ export default function App() {
         else if (result.error !== 'popup_closed') setAuthError('La connexion Google a échoué. Réessaie.')
         return
       }
-      storeToken(result.token, result.expiresIn)
-      setToken(result.token)
-      setAuthPhase('ready')
+      acceptToken(result.token, result.expiresIn)
     } catch {
       setAuthPhase('signedOut')
       setAuthError('Le service de connexion Google ne répond pas. Recharge la page.')
@@ -258,11 +300,21 @@ export default function App() {
     if (refreshLeft.current === 0) setRefreshing(false)
   }
 
-  function refreshBoard() {
+  function refreshBoardNow() {
     refreshLeft.current = 2
     setRefreshing(true)
     setReserved({})
     setRefreshKey((value) => value + 1)
+  }
+
+  function refreshBoard() {
+    if (showRenew) {
+      void renewSession().then((next) => {
+        if (next) refreshBoardNow()
+      })
+      return
+    }
+    refreshBoardNow()
   }
 
   function requestSignOut() {
@@ -270,9 +322,58 @@ export default function App() {
     if (confirmed) signOut()
   }
 
+  function holdSession() {
+    setSessionBlocked(true)
+  }
+
+  function acceptToken(nextToken: string, expiresIn: number) {
+    const issuedAt = Date.now()
+    storeToken(nextToken, expiresIn, issuedAt)
+    setToken(nextToken)
+    setExpiresAt(issuedAt + expiresIn * 1000)
+    setSessionBlocked(false)
+    setRenewError(null)
+    setAuthPhase('ready')
+  }
+
+  async function renewSession(): Promise<string | null> {
+    if (renewingRef.current) return null
+    renewingRef.current = true
+    setRenewing(true)
+    setRenewError(null)
+    try {
+      await loadGis()
+      initAuth(clientId)
+      const result = await requestToken('')
+      if (!result.ok) {
+        if (result.error === 'access_denied') loseSession('L’accès à l’agenda a été refusé.')
+        else if (result.error !== 'popup_closed') setRenewError('La connexion Google a échoué. Réessaie.')
+        return null
+      }
+      acceptToken(result.token, result.expiresIn)
+      return result.token
+    } catch {
+      setRenewError('Le service de connexion Google ne répond pas. Réessaie.')
+      return null
+    } finally {
+      renewingRef.current = false
+      setRenewing(false)
+    }
+  }
+
+  async function ensureToken(): Promise<string | null> {
+    if (!token) return null
+    if (!showRenew) return token
+    return renewSession()
+  }
+
   function loseSession(message: string) {
     clearStoredToken()
     setToken(null)
+    setExpiresAt(null)
+    setBookerName(null)
+    setSessionBlocked(false)
+    setRenewError(null)
     setAuthPhase('signedOut')
     setAuthError(message)
   }
@@ -283,6 +384,10 @@ export default function App() {
     // Forget the local token only. Revoking the Google grant ends the account session.
     clearStoredToken()
     setToken(null)
+    setExpiresAt(null)
+    setBookerName(null)
+    setSessionBlocked(false)
+    setRenewError(null)
     setAuthPhase('signedOut')
     setBusy({})
     setRoomEvents({})
@@ -290,7 +395,7 @@ export default function App() {
     clearNoticeTimers()
     setNotices([])
     setCardErrors({})
-    setNextMeeting(null)
+    setNextMeeting(undefined)
     setReleasing(false)
     setReleaseError(null)
     setPreviewReleased(false)
@@ -303,7 +408,7 @@ export default function App() {
   }
 
   async function release() {
-    const meeting = visibleMeeting(nextMeeting, new Date())
+    const meeting = visibleMeeting(nextMeeting ?? null, new Date())
     if (!meeting?.canRelease || releasing) return
     setReleaseError(null)
     setReleasing(true)
@@ -336,17 +441,18 @@ export default function App() {
       setReleasing(false)
       return
     }
-    if (!token) {
+    const accessToken = await ensureToken()
+    if (!accessToken) {
       setReleasing(false)
       return
     }
 
-    const result = await releaseRoom(token, meeting.eventId, meeting.calendarId)
+    const result = await releaseRoom(accessToken, meeting.eventId, meeting.calendarId)
     setReleasing(false)
     if (!result.ok) {
       if (result.detail) console.error(result.detail)
       if (result.reason === 'unauthorized') {
-        loseSession(releaseMessage(result.reason))
+        holdSession()
         return
       }
       setReleaseError(releaseMessage(result.reason))
@@ -388,17 +494,28 @@ export default function App() {
       setPendingId(null)
       return
     }
-    if (!token) {
+    const accessToken = await ensureToken()
+    if (!accessToken) {
       setPendingId(null)
       return
     }
 
-    const result = await bookRoom(token, calendarId, slot.start, slot.end)
+    let title = bookerName
+    if (!title) {
+      const fetched = await fetchBookerName(accessToken)
+      if (fetched) {
+        title = bookingTitle(fetched)
+        storeBookerName(title)
+        setBookerName(title)
+      }
+    }
+
+    const result = await bookRoom(accessToken, calendarId, slot.start, slot.end, bookingTitle(title))
     setPendingId(null)
     if (!result.ok) {
       if (result.detail) console.error(result.detail)
       if (result.reason === 'unauthorized') {
-        loseSession(bookMessage(result.reason))
+        holdSession()
         return
       }
       setCardErrors((current) => ({ ...current, [calendarId]: bookMessage(result.reason) }))
@@ -413,6 +530,18 @@ export default function App() {
     ? buildCards(config, locationId, busy, roomEvents, reserved, cardErrors, pendingId, now, selected)
     : []
   const occupancy = config ? seatOccupancy(config.rooms, busy, locationId, now) : null
+  const floors: FloorStat[] =
+    config && occupancy?.status === 'ready'
+      ? occupancy.floors
+          .flatMap((floor) => {
+            const label = config.locations.find((location) => location.id === floor.locationId)?.label
+            return label ? [{ ...floor, label }] : []
+          })
+          .sort((a, b) => {
+            const rank = (id: string) => config.locations.findIndex((location) => location.id === id)
+            return rank(a.locationId) - rank(b.locationId)
+          })
+      : []
   const reservedRooms = config
     ? pickReservedRooms(
         config.rooms,
@@ -441,7 +570,7 @@ export default function App() {
       ).length
     : 0
 
-  const loading = onBoard && missingCount > 0 && !busyError
+  const loading = onBoard && missingCount > 0 && !busyError && !pollsStopped
   const allFailed = visibleCount > 0 && failedCount === visibleCount
   let message: string | null = null
   let messageTone: 'neutral' | 'warn' = 'neutral'
@@ -453,7 +582,7 @@ export default function App() {
   } else if (onBoard && busyError && cards.length === 0 && !loading) {
     message = busyError
     messageTone = 'warn'
-  } else if (onBoard && !loading && cards.length === 0) {
+  } else if (onBoard && !loading && cards.length === 0 && !pollsStopped) {
     message =
       locationId === 'all'
         ? `Aucune salle libre jusqu’à ${formatClock(selected)}.`
@@ -539,7 +668,8 @@ export default function App() {
             notices={notices}
             onDismissNotice={dismissNotice}
           previewNote={preview ? PREVIEW_NOTE : null}
-          meeting={visibleMeeting(nextMeeting, now)}
+          meeting={visibleMeeting(nextMeeting ?? null, now)}
+          meetingKnown={nextMeeting !== undefined || pollsStopped}
           releasing={releasing}
           releaseError={releaseError}
           onRelease={() => {
@@ -548,8 +678,22 @@ export default function App() {
           onReserve={(id) => {
             void reserve(id)
           }}
+          sessionRenew={
+            showRenew
+              ? {
+                  blocked: pollsStopped,
+                  renewing,
+                  error: renewError,
+                  onRenew: () => {
+                    void renewSession().then((next) => {
+                      if (next) refreshBoardNow()
+                    })
+                  },
+                }
+              : null
+          }
           />
-          {occupancy ? <OccupancyStats occupancy={occupancy} /> : null}
+          {occupancy ? <OccupancyStats occupancy={occupancy} floors={floors} /> : null}
           <footer className="page-foot">
             <button type="button" className="foot-action" onClick={requestSignOut}>
               Se déconnecter
@@ -602,10 +746,12 @@ function LoginGate({
           onDismissNotice={() => {}}
           previewNote={null}
           meeting={null}
+          meetingKnown
           releasing={false}
           releaseError={null}
           onRelease={() => {}}
           onReserve={() => {}}
+          sessionRenew={null}
         />
       </div>
       <div className="login-scrim" />

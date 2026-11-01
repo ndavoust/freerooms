@@ -14,11 +14,7 @@ export function ReservedRooms({ rooms, now }: ReservedRoomsProps) {
   if (rooms.length === 0) return null
 
   return (
-    <section className="reserved-section" aria-labelledby="reserved-title">
-      <h2 id="reserved-title" className="section-title">
-        Salles réservées
-      </h2>
-      <ul className="room-list">
+    <ul className="room-list">
         {rooms.map((room) => {
           const titleId = `reserved-${room.calendarId.replace(/[^a-z0-9]+/gi, '-')}`
           const { elapsedRatio } = reservationProgress(now, room.start, room.end)
@@ -46,6 +42,5 @@ export function ReservedRooms({ rooms, now }: ReservedRoomsProps) {
           )
         })}
       </ul>
-    </section>
   )
 }

@@ -157,8 +157,8 @@ h1 {
   animation: spin 0.8s linear infinite;
 }
 
-.stats {
-  margin-top: 32px;
+.board-section + .board-section {
+  margin-top: 56px;
 }
 
 .stats-card {
@@ -187,6 +187,69 @@ h1 {
   margin: 8px 0 0;
   color: var(--ink-soft);
   font-size: 13px;
+}
+
+.stats-floors {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-floor-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.renew {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px 12px 12px 16px;
+  background: var(--soon-soft);
+  border-radius: 8px;
+  color: var(--soon);
+}
+
+.renew p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.renew-error {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.renew-action {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--blue);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.renew-action:hover {
+  background: var(--blue-hover);
+}
+
+.renew-action:disabled {
+  opacity: 0.7;
+  cursor: default;
 }
 
 .page-foot {
@@ -228,8 +291,40 @@ h1 {
   line-height: 1.2;
 }
 
+.section-title:has(+ [hidden]) {
+  margin-bottom: 0;
+}
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.section-chevron {
+  flex: none;
+  color: var(--ink-soft);
+  transition: transform 160ms ease;
+}
+
+.section-chevron.is-open {
+  transform: rotate(180deg);
+}
+
 .next-meeting {
-  margin: 0 0 16px;
+  margin: 0;
   padding: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -313,10 +408,6 @@ h1 {
 
 .meeting-bar-elapsed {
   background: var(--elapsed);
-}
-
-.reserved-section {
-  margin-top: 28px;
 }
 
 .reserved-head {
@@ -597,6 +688,10 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   .notice {
     animation: none;
+  }
+
+  .section-chevron {
+    transition: none;
   }
 }
 

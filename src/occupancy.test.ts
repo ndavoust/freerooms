@@ -20,7 +20,7 @@ describe('seatOccupancy', () => {
       'all',
       now,
     )
-    expect(result).toEqual({ status: 'ready', occupiedSeats: 6, totalSeats: 51, rate: 6 / 51 })
+    expect(result).toEqual({ status: 'ready', occupiedSeats: 6, totalSeats: 51, rate: 6 / 51, floors: [] })
   })
 
   it('ignores a booking that has not started or has already ended', () => {
@@ -59,7 +59,7 @@ describe('seatOccupancy', () => {
       'all',
       now,
     )
-    expect(result).toEqual({ status: 'ready', occupiedSeats: 8, totalSeats: 8, rate: 1 })
+    expect(result).toEqual({ status: 'ready', occupiedSeats: 8, totalSeats: 8, rate: 1, floors: [] })
   })
 
   it('limits the rate to the selected location', () => {
@@ -74,6 +74,44 @@ describe('seatOccupancy', () => {
       now,
     )
     expect(result).toMatchObject({ occupiedSeats: 6, totalSeats: 6 })
+  })
+
+  it('breaks the rate down by floor when every location is in scope', () => {
+    const rooms = [room('Paris', 45, 'floor-1'), room('Lyon', 10, 'floor-1'), room('Biarritz', 6, 'floor-2')]
+    const result = seatOccupancy(
+      rooms,
+      {
+        Paris: { busy: [] },
+        Lyon: { busy: [] },
+        Biarritz: { busy: [{ start: new Date('2026-10-30T13:00:00Z'), end: new Date('2026-10-30T15:00:00Z') }] },
+      },
+      'all',
+      now,
+    )
+    expect(result).toEqual({
+      status: 'ready',
+      occupiedSeats: 6,
+      totalSeats: 61,
+      rate: 6 / 61,
+      floors: [
+        { locationId: 'floor-1', occupiedSeats: 0, totalSeats: 55, rate: 0 },
+        { locationId: 'floor-2', occupiedSeats: 6, totalSeats: 6, rate: 1 },
+      ],
+    })
+  })
+
+  it('hides the floor breakdown when a single floor is selected', () => {
+    const rooms = [room('Paris', 45, 'floor-1'), room('Biarritz', 6, 'floor-2')]
+    const result = seatOccupancy(
+      rooms,
+      {
+        Paris: { busy: [] },
+        Biarritz: { busy: [{ start: new Date('2026-10-30T13:00:00Z'), end: new Date('2026-10-30T15:00:00Z') }] },
+      },
+      'floor-1',
+      now,
+    )
+    expect(result).toMatchObject({ occupiedSeats: 0, totalSeats: 45, floors: [] })
   })
 
   it('is empty when nothing can be counted', () => {
