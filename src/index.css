@@ -126,7 +126,7 @@ h1 {
 .app {
   width: min(960px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 24px 0 72px;
+  padding: 24px 0;
 }
 
 .icon-btn {
@@ -254,6 +254,8 @@ h1 {
 
 .page-foot {
   margin-top: 40px;
+  display: flex;
+  justify-content: center;
 }
 
 .foot-action {
