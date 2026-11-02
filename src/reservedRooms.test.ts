@@ -144,18 +144,43 @@ describe('pickReservedRooms', () => {
     expect(reserved[0]?.start).toEqual(at('2026-10-30T09:00:00Z'))
   })
 
-  it('leaves free, soon, and already listed rooms out', () => {
+  it('also lists a room that is on the free list while still occupied', () => {
+    const reserved = pickReservedRooms(
+      rooms,
+      locations,
+      {
+        'bordeaux@resource.calendar.google.com': eventsOf('2026-10-30T09:40:00Z', '2026-10-30T10:10:00Z', 'Bientôt'),
+      },
+      {
+        'bordeaux@resource.calendar.google.com': busyOf('2026-10-30T09:40:00Z', '2026-10-30T10:10:00Z'),
+      },
+      'all',
+      now,
+      until,
+      new Set(['bordeaux@resource.calendar.google.com']),
+    )
+    expect(reserved).toEqual([
+      {
+        calendarId: 'bordeaux@resource.calendar.google.com',
+        roomName: 'Bordeaux',
+        locationLabel: 'Guist’hau 1er étage',
+        summary: 'Bientôt',
+        start: at('2026-10-30T09:40:00Z'),
+        end: at('2026-10-30T10:10:00Z'),
+      },
+    ])
+  })
+
+  it('leaves a free room and an already listed hidden room out', () => {
     const reserved = pickReservedRooms(
       rooms,
       locations,
       {
         'biarritz@resource.calendar.google.com': eventsOf('2026-10-30T09:00:00Z', '2026-10-30T12:00:00Z', 'Comité'),
-        'bordeaux@resource.calendar.google.com': eventsOf('2026-10-30T09:40:00Z', '2026-10-30T10:10:00Z', 'Bientôt'),
         'lyon@resource.calendar.google.com': eventsOf('2026-10-30T12:00:00Z', '2026-10-30T13:00:00Z', 'Plus tard'),
       },
       {
         'biarritz@resource.calendar.google.com': busyOf('2026-10-30T09:00:00Z', '2026-10-30T12:00:00Z'),
-        'bordeaux@resource.calendar.google.com': busyOf('2026-10-30T09:40:00Z', '2026-10-30T10:10:00Z'),
         'lyon@resource.calendar.google.com': { busy: [] },
       },
       'all',

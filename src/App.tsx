@@ -836,17 +836,8 @@ function toCard(
   now: Date,
   until: Date,
 ): CardModel | null {
-  if (reserved[room.calendarId]) {
-    return {
-      calendarId: room.calendarId,
-      name: room.name,
-      locationLabel,
-      capacity: room.capacity,
-      mode: 'reserved',
-      canBook: false,
-      pending: false,
-    }
-  }
+  // The booking is shown under “Prochaine réunion”, so it leaves the free list.
+  if (reserved[room.calendarId]) return null
 
   const status = classifyRoom(now, until, entry.busy)
   if (status.kind === 'hidden') return null

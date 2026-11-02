@@ -4,17 +4,27 @@ import type { RoomEvent } from './reservedRooms.ts'
 import { formatParisDateTime } from './time.ts'
 
 const FREE_BUSY_CHUNK = 50
-const EVENT_SUMMARY = 'Réservé last minute'
+const EVENT_SUMMARY = 'Last minute'
+const LEGACY_SUMMARY = 'Réservé last minute'
 
 export function bookingTitle(name: string | null | undefined): string {
-  const trimmed = name?.trim() ?? ''
-  if (!trimmed) return EVENT_SUMMARY
-  const at = trimmed.indexOf('@')
-  if (at >= 0) {
-    const local = trimmed.slice(0, at).trim()
-    return local || EVENT_SUMMARY
+  const first = firstName(name)
+  return first ? `${EVENT_SUMMARY} ${first}` : EVENT_SUMMARY
+}
+
+function firstName(name: string | null | undefined): string | null {
+  let source = name?.trim() ?? ''
+  if (!source || source === EVENT_SUMMARY || source === LEGACY_SUMMARY) return null
+  if (source.startsWith(`${EVENT_SUMMARY} `)) {
+    source = source.slice(EVENT_SUMMARY.length + 1).trim()
   }
-  return trimmed
+
+  const at = source.indexOf('@')
+  if (at >= 0) source = source.slice(0, at).trim()
+  const token = source.split(/\s+/).find((part) => part.length > 0)?.split(/[._]/)[0]
+  if (!token) return null
+  if (token === token.toLowerCase()) return token.charAt(0).toUpperCase() + token.slice(1)
+  return token
 }
 
 export type BusyEntry = {

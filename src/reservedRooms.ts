@@ -31,7 +31,8 @@ export function reservationProgress(now: Date, start: Date, end: Date): { elapse
 }
 
 /**
- * Rooms hidden from the free list, with the meeting that blocks them.
+ * Rooms booked now or before the slot, with the meeting that blocks them.
+ * A room that frees before the slot stays on the free list and is listed here too.
  * An in-progress booking wins over a later one. Event titles win over bare busy blocks.
  */
 export function pickReservedRooms(
@@ -49,10 +50,13 @@ export function pickReservedRooms(
 
   for (const room of rooms) {
     if (locationId !== 'all' && room.locationId !== locationId) continue
-    if (shownIds.has(room.calendarId)) continue
     const entry = busyByCalendar[room.calendarId]
     if (!entry || entry.error) continue
-    if (classifyRoom(now, until, entry.busy).kind !== 'hidden') continue
+    const status = classifyRoom(now, until, entry.busy)
+    if (status.kind === 'free') continue
+    // Soon rooms stay on the free list and are included below.
+    // Skip a room that stays busy for the whole slot when it is already listed elsewhere.
+    if (status.kind === 'hidden' && shownIds.has(room.calendarId)) continue
 
     const booking = blockingBooking(now, until, eventsByCalendar[room.calendarId] ?? [], entry.busy)
     if (!booking) continue
